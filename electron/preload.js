@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('voiceOS', {
   writeTextFile: (target, content) => ipcRenderer.invoke('system:write-text-file', target, content),
   clipboard: (text) => ipcRenderer.invoke('system:clipboard', text),
   power: (action) => ipcRenderer.invoke('system:power', action),
+  aiPlan: (request) => ipcRenderer.invoke('ai:plan', request),
+  home: process.env.USERPROFILE,
   devtools: () => ipcRenderer.invoke('app:toggle-devtools'),
   onHotkey: (callback) => ipcRenderer.on('voice:hotkey', callback)
 });
