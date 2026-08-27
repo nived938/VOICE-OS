@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
-
 contextBridge.exposeInMainWorld('voiceOS', {
   open: (target) => ipcRenderer.invoke('system:open', target),
+  openUrl: (url) => ipcRenderer.invoke('system:open-url', url),
   openPath: (target) => ipcRenderer.invoke('system:open-path', target),
   reveal: (target) => ipcRenderer.invoke('system:reveal', target),
   searchFiles: (query) => ipcRenderer.invoke('system:search-files', query),
