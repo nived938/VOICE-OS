@@ -1,33 +1,28 @@
 const { app, BrowserWindow, ipcMain, shell, globalShortcut, clipboard } = require('electron');
-const path = require('path');
-const fs = require('fs');
-const http = require('http');
-const { execFile, spawn } = require('child_process');
-
-let win;
-const DEFAULT_MODEL = process.env.VOICE_OS_OLLAMA_MODEL || 'llama3.2:3b';
-
-function createWindow() {
-  win = new BrowserWindow({ width: 1180, height: 760, minWidth: 900, minHeight: 620, backgroundColor: '#0b0d12', title: 'VOICE OS', webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false } });
-  win.loadFile(path.join(__dirname, '../renderer/index.html'));
-}
-function runPowerShell(command) { return new Promise((resolve, reject) => { execFile('powershell.exe', ['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-Command',command], { windowsHide:true }, (error, stdout, stderr) => error ? reject(new Error(stderr || error.message)) : resolve(stdout.trim())); }); }
-function launchTarget(target) { return new Promise((resolve,reject) => { const child=spawn('cmd.exe',['/c','start','',target],{detached:true,stdio:'ignore',windowsHide:true}); child.on('error',reject); child.unref(); resolve(`Opened ${target}`); }); }
-function openUrl(url) { return shell.openExternal(url).then(() => `Opened ${url}`); }
-function ollamaChat(prompt) { return new Promise((resolve,reject) => { const body=JSON.stringify({model:DEFAULT_MODEL,stream:false,messages:[{role:'user',content:prompt}]}); const req=http.request({hostname:'127.0.0.1',port:11434,path:'/api/chat',method:'POST',headers:{'Content-Type':'application/json','Content-Length':Buffer.byteLength(body)}},res=>{let data='';res.on('data',c=>data+=c);res.on('end',()=>{try{const json=JSON.parse(data);if(json.error)return reject(new Error(json.error));resolve(json.message?.content||'')}catch{reject(new Error('Could not parse Ollama response'))}})});req.on('error',()=>reject(new Error('Ollama is not running at http://127.0.0.1:11434')));req.write(body);req.end(); }); }
-
-ipcMain.handle('system:open', async (_,target) => { if(!target||typeof target!=='string')throw new Error('Missing target'); return launchTarget(target.trim()); });
-ipcMain.handle('system:open-url', async (_,url) => { if(!/^https?:\/\//i.test(url)) throw new Error('Invalid URL'); return openUrl(url); });
-ipcMain.handle('system:open-path', async (_,target) => { const full=path.resolve(target); if(!fs.existsSync(full))throw new Error(`Not found: ${target}`); const result=await shell.openPath(full); if(result)throw new Error(result); return `Opened ${full}`; });
-ipcMain.handle('system:reveal', async (_,target) => { const full=path.resolve(target); if(!fs.existsSync(full))throw new Error(`Not found: ${target}`); shell.showItemInFolder(full); return `Showing ${full}`; });
-ipcMain.handle('system:power', async (_,action) => { const allowed={lock:'rundll32.exe user32.dll,LockWorkStation',sleep:'rundll32.exe powrprof.dll,SetSuspendState 0,1,0'}; if(!allowed[action])throw new Error('Unsupported system action'); await runPowerShell(allowed[action]); return action; });
-ipcMain.handle('system:search-files', async (_,query) => { const safe=String(query||'').replace(/'/g,"''"),home=process.env.USERPROFILE; const command=`Get-ChildItem -Path '${home}' -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '*${safe}*' } | Select-Object -First 20 FullName,Length,LastWriteTime | ConvertTo-Json -Compress`; const raw=await runPowerShell(command); if(!raw)return[];const parsed=JSON.parse(raw);return Array.isArray(parsed)?parsed:[parsed]; });
-ipcMain.handle('system:read-file', async (_,target) => { const full=path.resolve(target);if(!fs.existsSync(full))throw new Error('File not found');const stat=fs.statSync(full);if(!stat.isFile())throw new Error('Not a file');if(stat.size>2000000)throw new Error('File is too large to read');return fs.readFileSync(full,'utf8'); });
-ipcMain.handle('system:write-text-file', async (_,target,content) => { const full=path.resolve(target);fs.mkdirSync(path.dirname(full),{recursive:true});fs.writeFileSync(full,String(content),'utf8');return `Saved ${full}`; });
-ipcMain.handle('system:clipboard', async (_,text) => { clipboard.writeText(String(text||''));return 'Copied to clipboard'; });
-ipcMain.handle('ai:status', async () => ({model:DEFAULT_MODEL,endpoint:'http://127.0.0.1:11434',online:await new Promise(resolve=>{const r=http.get('http://127.0.0.1:11434/api/tags',res=>resolve(res.statusCode===200));r.on('error',()=>resolve(false));r.setTimeout(1500,()=>{r.destroy();resolve(false)});})}));
-ipcMain.handle('ai:plan', async (_,request) => { const prompt=`You are VOICE OS, a Windows desktop assistant. Convert the user's request into JSON only. Return ONLY a JSON array, with no markdown, no explanation. Each item MUST have an "action" field. Allowed actions: open_app with target, open_url with url, search_web with query, open_path with target, search_files with query, reveal_path with target, lock_pc, sleep_pc, answer with text. For "open YouTube and search X", return exactly [{"action":"open_url","url":"https://www.youtube.com"},{"action":"open_url","url":"https://www.youtube.com/results?search_query=X"}]. URL-encode query text. For a web search, use https://www.google.com/search?q=QUERY. For common Windows apps use chrome, msedge, notepad.exe, calc.exe, explorer.exe, cmd.exe, powershell.exe. Never invent destructive actions. User request: ${request}`; return ollamaChat(prompt); });
+const path=require('path'),fs=require('fs'),http=require('http');
+const {execFile,spawn}=require('child_process');
+let win;const DEFAULT_MODEL=process.env.VOICE_OS_OLLAMA_MODEL||'llama3.2:3b';
+function createWindow(){win=new BrowserWindow({width:1180,height:760,minWidth:900,minHeight:620,backgroundColor:'#090b10',title:'VOICE OS',webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false}});win.loadFile(path.join(__dirname,'../renderer/index.html'));}
+function ps(command){return new Promise((resolve,reject)=>execFile('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-Command',command],{windowsHide:true},(e,o,s)=>e?reject(new Error(s||e.message)):resolve(o.trim())));}
+function launchTarget(target){return new Promise((resolve,reject)=>{const c=spawn('cmd.exe',['/c','start','',target],{detached:true,stdio:'ignore',windowsHide:true});c.on('error',reject);c.unref();resolve(`Opened ${target}`);});}
+function openUrl(url){return shell.openExternal(url).then(()=>`Opened ${url}`);}
+function sendKeys(keys){return ps(`Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('${String(keys).replace(/'/g,"''")}')`);}
+function keyCode(key){const m={enter:'{ENTER}',return:'{ENTER}',tab:'{TAB}',escape:'{ESC}',esc:'{ESC}',backspace:'{BACKSPACE}',delete:'{DELETE}',space:' ',up:'{UP}',down:'{DOWN}',left:'{LEFT}',right:'{RIGHT}',home:'{HOME}',end:'{END}',pageup:'{PGUP}',pagedown:'{PGDN}',f1:'{F1}',f2:'{F2}',f3:'{F3}',f4:'{F4}',f5:'{F5}',f6:'{F6}',f7:'{F7}',f8:'{F8}',f9:'{F9}',f10:'{F10}',f11:'{F11}',f12:'{F12}'};return m[String(key).toLowerCase()]||String(key).slice(0,1);}
+function ollamaChat(prompt){return new Promise((resolve,reject)=>{const body=JSON.stringify({model:DEFAULT_MODEL,stream:false,messages:[{role:'user',content:prompt}]});const req=http.request({hostname:'127.0.0.1',port:11434,path:'/api/chat',method:'POST',headers:{'Content-Type':'application/json','Content-Length':Buffer.byteLength(body)}},res=>{let d='';res.on('data',c=>d+=c);res.on('end',()=>{try{const j=JSON.parse(d);if(j.error)return reject(new Error(j.error));resolve(j.message?.content||'')}catch{reject(new Error('Could not parse Ollama response'))}})});req.on('error',()=>reject(new Error('Ollama is not running at http://127.0.0.1:11434')));req.write(body);req.end();});}
+ipcMain.handle('system:open',async(_,t)=>launchTarget(t));
+ipcMain.handle('system:open-url',async(_,u)=>{if(!/^https?:\/\//i.test(u))throw new Error('Invalid URL');return openUrl(u);});
+ipcMain.handle('system:open-path',async(_,t)=>{const f=path.resolve(t);if(!fs.existsSync(f))throw new Error(`Not found: ${t}`);const r=await shell.openPath(f);if(r)throw new Error(r);return`Opened ${f}`;});
+ipcMain.handle('system:reveal',async(_,t)=>{const f=path.resolve(t);if(!fs.existsSync(f))throw new Error(`Not found: ${t}`);shell.showItemInFolder(f);return`Showing ${f}`;});
+ipcMain.handle('system:power',async(_,a)=>{const x={lock:'rundll32.exe user32.dll,LockWorkStation',sleep:'rundll32.exe powrprof.dll,SetSuspendState 0,1,0'};if(!x[a])throw new Error('Unsupported system action');await ps(x[a]);return a;});
+ipcMain.handle('system:search-files',async(_,q)=>{const safe=String(q||'').replace(/'/g,"''"),home=process.env.USERPROFILE;const raw=await ps(`Get-ChildItem -Path '${home}' -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '*${safe}*' } | Select-Object -First 30 FullName,Length,LastWriteTime | ConvertTo-Json -Compress`);if(!raw)return[];const p=JSON.parse(raw);return Array.isArray(p)?p:[p];});
+ipcMain.handle('system:read-file',async(_,t)=>{const f=path.resolve(t),s=fs.statSync(f);if(!s.isFile()||s.size>2000000)throw new Error('File cannot be read');return fs.readFileSync(f,'utf8');});
+ipcMain.handle('system:write-text-file',async(_,t,c)=>{const f=path.resolve(t);fs.mkdirSync(path.dirname(f),{recursive:true});fs.writeFileSync(f,String(c),'utf8');return`Saved ${f}`;});
+ipcMain.handle('system:clipboard',async(_,t)=>{clipboard.writeText(String(t||''));return'Copied to clipboard';});
+ipcMain.handle('input:type-text',async(_,t)=>{const e=String(t||'').replace(/[+^%~(){}]/g,c=>`{${c}}`);await sendKeys(e);return'Text typed.';});
+ipcMain.handle('input:press-key',async(_,k)=>{await sendKeys(keyCode(k));return`Pressed ${k}.`;});
+ipcMain.handle('input:hotkey',async(_,keys)=>{const mods={ctrl:'^',control:'^',alt:'%',shift:'+'};const p=String(keys||'').split('+').map(x=>x.trim().toLowerCase());const main=keyCode(p.pop());await sendKeys(p.map(x=>mods[x]||'').join('')+main);return`Pressed ${keys}.`;});
+ipcMain.handle('ai:status',async()=>({model:DEFAULT_MODEL,online:await new Promise(r=>{const x=http.get('http://127.0.0.1:11434/api/tags',res=>r(res.statusCode===200));x.on('error',()=>r(false));x.setTimeout(1200,()=>{x.destroy();r(false);});})}));
+ipcMain.handle('ai:plan',async(_,request)=>ollamaChat(`You are JARVIS-style VOICE OS. Return ONLY a valid JSON array. Allowed actions: open_app{target}, open_url{url}, search_web{query}, open_path{target}, search_files{query}, reveal_path{target}, lock_pc{}, sleep_pc{}, type_text{text}, press_key{key}, hotkey{keys}, clipboard{text}, answer{text}. Chain actions when needed. For YouTube search, use its results URL. For web search use Google. Common apps: chrome, msedge, notepad.exe, calc.exe, explorer.exe, cmd.exe, powershell.exe. Never invent destructive actions. Request: ${request}`));
 ipcMain.handle('app:toggle-devtools',()=>win.webContents.toggleDevTools());
-app.whenReady().then(()=>{createWindow();globalShortcut.register('Control+Space',()=>win?.webContents.send('voice:hotkey'));});
-app.on('will-quit',()=>globalShortcut.unregisterAll());
-app.on('window-all-closed',()=>{if(process.platform!=='darwin')app.quit();});
+app.whenReady().then(()=>{createWindow();globalShortcut.register('Control+Space',()=>win?.webContents.send('voice:hotkey'));globalShortcut.register('Control+Alt+Space',()=>win?.webContents.send('voice-panel:hotkey'));globalShortcut.register('Control+Shift+Space',()=>win?.webContents.send('circle-search:hotkey'));});
+app.on('will-quit',()=>globalShortcut.unregisterAll());app.on('window-all-closed',()=>{if(process.platform!=='darwin')app.quit();});
