@@ -1,0 +1,24 @@
+{
+  "name": "voice-os",
+  "version": "1.0.0",
+  "description": "A local Windows voice and text computer assistant inspired by VoiceOS.",
+  "main": "electron/main.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "dist": "electron-builder --win nsis"
+  },
+  "dependencies": {
+    "electron": "^38.1.0"
+  },
+  "devDependencies": {
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.nived.voiceos",
+    "productName": "VOICE OS",
+    "files": ["electron/**/*", "renderer/**/*", "README.md"],
+    "win": { "target": "nsis", "icon": "" }
+  }
+}
