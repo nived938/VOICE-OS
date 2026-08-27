@@ -9,8 +9,13 @@ contextBridge.exposeInMainWorld('voiceOS', {
   writeTextFile: (target, content) => ipcRenderer.invoke('system:write-text-file', target, content),
   clipboard: (text) => ipcRenderer.invoke('system:clipboard', text),
   power: (action) => ipcRenderer.invoke('system:power', action),
+  typeText: (text) => ipcRenderer.invoke('input:type-text', text),
+  pressKey: (key) => ipcRenderer.invoke('input:press-key', key),
+  hotkey: (keys) => ipcRenderer.invoke('input:hotkey', keys),
   aiPlan: (request) => ipcRenderer.invoke('ai:plan', request),
   home: process.env.USERPROFILE,
   devtools: () => ipcRenderer.invoke('app:toggle-devtools'),
-  onHotkey: (callback) => ipcRenderer.on('voice:hotkey', callback)
+  onHotkey: (callback) => ipcRenderer.on('voice:hotkey', callback),
+  onCircleSearch: (callback) => ipcRenderer.on('circle-search:hotkey', callback),
+  onVoicePanel: (callback) => ipcRenderer.on('voice-panel:hotkey', callback)
 });
